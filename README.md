@@ -1,4 +1,4 @@
 pylicense
 =========
 
-Aply license information to a git ptoject.
+Apply license information to a git ptoject.
