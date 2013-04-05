@@ -59,8 +59,6 @@ def process_file(filename, config):
 
     # create backup
     backup_filename = filename + '~'
-    if verbose:
-        print('adding header to \'{f}\'... '.format(f=filename), end='')
     try:
         copyfile(filename, backup_filename)
     except:
@@ -78,9 +76,7 @@ def process_file(filename, config):
     # remove backup
     try:
         os.remove(backup_filename)
-        print('done')
     except:
-        print('done (but could not remove backup)')
         return 1
     return 0
 
