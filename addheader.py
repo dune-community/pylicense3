@@ -35,8 +35,9 @@ def process_dir(dirname, config):
     include = re.compile('|'.join(fnmatch.translate(p) for p in config.get('files', 'include_patterns').split()))
     exclude = re.compile('|'.join(fnmatch.translate(p) for p in config.get('files', 'exclude_patterns').split()))
     for root, _, files in os.walk(dirname):
-        for abspath in [os.path.join(root, f) for f in files if include.match(f) and not exclude.match(f)]:
-            yield abspath, process_file(abspath, config)
+        for abspath in [os.path.join(root, f) for f in files]:
+            if include.match(abspath) and not exclude.match(abspath):
+                yield abspath, process_file(abspath, config)
 
 
 def process_file(filename, config):
