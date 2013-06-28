@@ -25,6 +25,7 @@ from __future__ import print_function
 import ConfigParser
 from docopt import docopt
 from shutil import copyfile
+import subprocess
 import os
 import sys
 import re
@@ -37,10 +38,10 @@ def process_dir(dirname, config):
     for root, _, files in os.walk(dirname):
         for abspath in [os.path.join(root, f) for f in files]:
             if include.match(abspath) and not exclude.match(abspath):
-                yield abspath, process_file(abspath, config)
+                yield abspath, process_file(abspath, config, dirname)
 
 
-def add_multiple_authors(author_list, prefix, first_line_label, target):
+def add_multiple_authors(author_list, prefix, first_line_label, target, max_width):
     num_authors = len(author_list)
     assert num_authors > 0
     line = '{p} {label}: {first_author}'.format(p=prefix, label=first_line_label, first_author=author_list[0])
@@ -62,7 +63,7 @@ def add_multiple_authors(author_list, prefix, first_line_label, target):
     target.write(line + '\n')
 
 
-def process_file(filename, config):
+def process_file(filename, config, root):
     assert(config.has_option('header', 'name'))
     project_name = config.get('header', 'name').strip()
     assert(config.has_option('header', 'license'))
@@ -78,6 +79,24 @@ def process_file(filename, config):
     list_contributors = False
     if config.has_option('header', 'list_contributers'):
         list_contributors = config.getboolean('header', 'list_contributers')
+    contributors = []
+    if list_contributors:
+        try:
+            ret = subprocess.Popen('git blame ' + filename + ' | perl -n -e \'/\\s\\((.*?)\\s[0-9]{4}/ && print \"$1\\n"\' | uniq',
+                                    shell=True,
+                                    cwd=root,
+                                    stdout=subprocess.PIPE,
+                                    stderr=sys.stderr)
+            out, _ = ret.communicate()
+            contributors = out.strip().split('\n')
+            for ii in range(len(contributors)):
+                contributors[ii] = contributors[ii].strip()
+            contributors = list(set(contributors))
+            contributors = [x for x in contributors if x not in copyright_holders]
+            list_contributors = True if len(contributors) > 0 else False
+        except:
+            print('WARNING: there was git related error, contributors will not be listed!')
+            list_contributors = False
     prefix = '#'
     if config.has_option('header', 'prefix'):
         prefix = config.get('header', 'prefix')
@@ -100,11 +119,12 @@ def process_file(filename, config):
                     target.write('{line}:\n'.format(line=line))
                     target.write('{prefix}   {url}\n'.format(prefix=prefix, url=url))
             # copyright holders
-            add_multiple_authors(copyright_holders, prefix, 'Copyright holders', target)
-
+            add_multiple_authors(copyright_holders, prefix, 'Copyright holders', target, max_width)
             target.write('{p} License: {l}\n'.format(p=prefix, l=license))
+            # contributors
             if list_contributors:
-                raise Exception('ERROR: listing of contributors not implemented yet!')
+                target.write(prefix + '\n')
+                add_multiple_authors(contributors, prefix, 'Contributors', target, max_width)
             target.write('\n')
             target.writelines(source.readlines())
     # remove backup
