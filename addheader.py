@@ -45,6 +45,8 @@ def process_file(filename, config):
     project_name = config.get('header', 'name').strip()
     assert(config.has_option('header', 'license'))
     license = config.get('header', 'license').strip()
+    url = config.get('header', 'url').strip() if config.has_option('header', 'license') else None
+    max_width = int(config.get('header', 'max_width')) if config.has_option('header', 'max_width') else 78
     try:
         copyright_holders = [name.strip() for name in config.get('header', 'copyright_holders').strip().split(',')]
         if len(copyright_holders) == 0:
@@ -67,8 +69,34 @@ def process_file(filename, config):
     # write header to original file
     with open(backup_filename, 'r') as source:
         with open(filename, 'w') as target:
-            target.write('{p} {n}\n'.format(p=prefix, n=project_name))
-            target.write('{p} Copyright Holders: {c}\n'.format(p=prefix, c=', '.join(copyright_holders)))
+            # project name and url
+            line = '{p} {n}'.format(p=prefix, n=project_name)
+            if url is not None:
+                if len(line) + len(url) + len('().') <= max_width:
+                    target.write('{line} ({url}).\n'.format(line=line, url=url))
+                else:
+                    target.write('{line}:\n'.format(line=line))
+                    target.write('{prefix}   {url}\n'.format(prefix=prefix, url=url))
+            # copyright holders
+            num_authors = len(copyright_holders)
+            assert num_authors > 0
+            line = '{p} Copyright Holders: {first_author}'.format(p=prefix, first_author=copyright_holders[0])
+            if num_authors > 1:
+                line = line + ','
+            line_prefix = '{p}                   '.format(p=prefix)
+            for ii in range(1, num_authors):
+                author = copyright_holders[ii]
+                postfix = ''
+                if ii < num_authors - 1:
+                    postfix = ','
+                else:
+                    postfix = ''
+                if len(line + ' ' + author + postfix) <= max_width:
+                    line = line + ' ' + author + postfix
+                else:
+                    target.write(line + '\n')
+                    line = line_prefix + ' ' + author + postfix
+            target.write(line + '\n')
             target.write('{p} License: {l}\n'.format(p=prefix, l=license))
             if list_contributors:
                 raise Exception('ERROR: listing of contributors not implemented yet!')
