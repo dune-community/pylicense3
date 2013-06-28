@@ -12,7 +12,7 @@ Usage:
 
 
 Arguments:
-    FILE    File to prepend the header to.
+    DIR             Directory to process.
 
 Options:
     -h, --help      Show this message.
@@ -67,7 +67,7 @@ def process_file(filename, config):
     # write header to original file
     with open(backup_filename, 'r') as source:
         with open(filename, 'w') as target:
-            target.write('{p} {n}: {f}\n'.format(p=prefix, n=project_name, f=filename))
+            target.write('{p} {n}\n'.format(p=prefix, n=project_name))
             target.write('{p} Copyright Holders: {c}\n'.format(p=prefix, c=', '.join(copyright_holders)))
             target.write('{p} License: {l}\n'.format(p=prefix, l=license))
             if list_contributors:
