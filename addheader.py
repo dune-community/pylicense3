@@ -40,6 +40,28 @@ def process_dir(dirname, config):
                 yield abspath, process_file(abspath, config)
 
 
+def add_multiple_authors(author_list, prefix, first_line_label, target):
+    num_authors = len(author_list)
+    assert num_authors > 0
+    line = '{p} {label}: {first_author}'.format(p=prefix, label=first_line_label, first_author=author_list[0])
+    if num_authors > 1:
+        line = line + ','
+    line_prefix = '{p}                   '.format(p=prefix)
+    for ii in range(1, num_authors):
+        author = author_list[ii]
+        postfix = ''
+        if ii < num_authors - 1:
+            postfix = ','
+        else:
+            postfix = ''
+        if len(line + ' ' + author + postfix) <= max_width:
+            line = line + ' ' + author + postfix
+        else:
+            target.write(line + '\n')
+            line = line_prefix + ' ' + author + postfix
+    target.write(line + '\n')
+
+
 def process_file(filename, config):
     assert(config.has_option('header', 'name'))
     project_name = config.get('header', 'name').strip()
@@ -78,25 +100,8 @@ def process_file(filename, config):
                     target.write('{line}:\n'.format(line=line))
                     target.write('{prefix}   {url}\n'.format(prefix=prefix, url=url))
             # copyright holders
-            num_authors = len(copyright_holders)
-            assert num_authors > 0
-            line = '{p} Copyright Holders: {first_author}'.format(p=prefix, first_author=copyright_holders[0])
-            if num_authors > 1:
-                line = line + ','
-            line_prefix = '{p}                   '.format(p=prefix)
-            for ii in range(1, num_authors):
-                author = copyright_holders[ii]
-                postfix = ''
-                if ii < num_authors - 1:
-                    postfix = ','
-                else:
-                    postfix = ''
-                if len(line + ' ' + author + postfix) <= max_width:
-                    line = line + ' ' + author + postfix
-                else:
-                    target.write(line + '\n')
-                    line = line_prefix + ' ' + author + postfix
-            target.write(line + '\n')
+            add_multiple_authors(copyright_holders, prefix, 'Copyright holders', target)
+
             target.write('{p} License: {l}\n'.format(p=prefix, l=license))
             if list_contributors:
                 raise Exception('ERROR: listing of contributors not implemented yet!')
