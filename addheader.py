@@ -95,7 +95,7 @@ def process_file(filename, config, root):
             contributors = [x for x in contributors if x not in copyright_holders]
             list_contributors = True if len(contributors) > 0 else False
         except:
-            print('WARNING: there was git related error, contributors will not be listed!')
+            print('WARNING: there was a git related error, contributors will not be listed!')
             list_contributors = False
     prefix = '#'
     if config.has_option('header', 'prefix'):
