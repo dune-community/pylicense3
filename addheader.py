@@ -41,26 +41,13 @@ def process_dir(dirname, config):
                 yield abspath, process_file(abspath, config, dirname)
 
 
-def add_multiple_authors(author_list, prefix, first_line_label, target, max_width):
-    num_authors = len(author_list)
-    assert num_authors > 0
-    line = '{p} {label}: {first_author}'.format(p=prefix, label=first_line_label, first_author=author_list[0])
-    if num_authors > 1:
-        line = line + ','
-    line_prefix = '{p}                   '.format(p=prefix)
-    for ii in range(1, num_authors):
-        author = author_list[ii]
-        postfix = ''
-        if ii < num_authors - 1:
-            postfix = ','
-        else:
-            postfix = ''
-        if len(line + ' ' + author + postfix) <= max_width:
-            line = line + ' ' + author + postfix
-        else:
-            target.write(line + '\n')
-            line = line_prefix + ' ' + author + postfix
-    target.write(line + '\n')
+def add_multiple_authors(author_list, prefix, first_line_label, target):
+    first_author = True
+    for author in author_list:
+        label = first_line_label + ':' if first_author else ' ' * (len(first_line_label) + 1)
+        line = '{} {} {}\n'.format(prefix, label, author)
+        target.write(line)
+        first_author = False
 
 
 def process_file(filename, config, root):
@@ -108,12 +95,12 @@ def process_file(filename, config, root):
                 target.write('{line}:\n'.format(line=line))
                 target.write('{prefix}   {url}\n'.format(prefix=prefix, url=url))
         # copyright holders
-        add_multiple_authors(copyright_holders, prefix, 'Copyright holders', target, max_width)
+        target.write(prefix + ' Copyright Holders: ' + ', '.join(copyright_holders) + '\n')
         target.write('{p} License: {l}\n'.format(p=prefix, l=license))
         # contributors
         if list_contributors:
             target.write(prefix + '\n')
-            add_multiple_authors(contributors, prefix, 'Contributors', target, max_width)
+            add_multiple_authors(contributors, prefix, 'Contributors', target)
         target.write('\n')
 
     source = open(filename).readlines()
