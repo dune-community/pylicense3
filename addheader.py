@@ -101,37 +101,61 @@ def process_file(filename, config, root):
     if config.has_option('header', 'prefix'):
         prefix = config.get('header', 'prefix')
 
-    # create backup
-    backup_filename = filename + '~'
-    try:
-        copyfile(filename, backup_filename)
-    except:
-        raise Exception('ERROR: could not create backup file \'{f}\'!'.format(backup_filename))
+    def insert_license_text(target):
+        # project name and url
+        line = '{p} {n}'.format(p=prefix, n=project_name)
+        if url is not None:
+            if len(line) + len(url) + len('().') <= max_width:
+                target.write('{line} ({url}).\n'.format(line=line, url=url))
+            else:
+                target.write('{line}:\n'.format(line=line))
+                target.write('{prefix}   {url}\n'.format(prefix=prefix, url=url))
+        # copyright holders
+        add_multiple_authors(copyright_holders, prefix, 'Copyright holders', target, max_width)
+        target.write('{p} License: {l}\n'.format(p=prefix, l=license))
+        # contributors
+        if list_contributors:
+            target.write(prefix + '\n')
+            add_multiple_authors(contributors, prefix, 'Contributors', target, max_width)
+        target.write('\n')
+
+    source = open(filename).readlines()
+    source.append(None)
+    source_iter = iter(source)
+
     # write header to original file
-    with open(backup_filename, 'r') as source:
-        with open(filename, 'w') as target:
-            # project name and url
-            line = '{p} {n}'.format(p=prefix, n=project_name)
-            if url is not None:
-                if len(line) + len(url) + len('().') <= max_width:
-                    target.write('{line} ({url}).\n'.format(line=line, url=url))
-                else:
-                    target.write('{line}:\n'.format(line=line))
-                    target.write('{prefix}   {url}\n'.format(prefix=prefix, url=url))
-            # copyright holders
-            add_multiple_authors(copyright_holders, prefix, 'Copyright holders', target, max_width)
-            target.write('{p} License: {l}\n'.format(p=prefix, l=license))
-            # contributors
-            if list_contributors:
-                target.write(prefix + '\n')
-                add_multiple_authors(contributors, prefix, 'Contributors', target, max_width)
-            target.write('\n')
-            target.writelines(source.readlines())
-    # remove backup
-    try:
-        os.remove(backup_filename)
-    except:
-        return 1
+    with open(filename, 'w') as target:
+
+        line = next(source_iter)
+
+        # skip shebang if present
+        if line is not None and line.startswith('#!'):
+            target.write(line)
+            line = next(source_iter)
+
+        # skip line defining file encoding
+        if line is not None and re.match('.*coding[:=]\s*', line): #([-\w.]+)', line):
+            target.write(line)
+            line = next(source_iter)
+
+        # skip lines containing whitespace
+        while line is not None and line.isspace():
+            target.write(line)
+            line = next(source_iter)
+
+        # remove all following comment lines, assuming they contain the previous
+        # lincense text
+        while line is not None and line.startswith('#'):
+            line = next(source_iter)
+
+        # write the new license text
+        insert_license_text(target)
+
+        # copy all remaining content
+        while line is not None:
+            target.write(line)
+            line = next(source_iter)
+
     return 0
 
 if __name__ == '__main__':
