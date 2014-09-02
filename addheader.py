@@ -124,7 +124,6 @@ def process_file(filename, config, root):
 
         # skip lines containing whitespace
         while line is not None and line.isspace():
-            target.write(line)
             line = next(source_iter)
 
         # remove all following comment lines, assuming they contain the previous
@@ -134,6 +133,10 @@ def process_file(filename, config, root):
 
         # write the new license text
         insert_license_text(target)
+
+        # skip whitespace after license text
+        while line is not None and line.isspace():
+            line = next(source_iter)
 
         # copy all remaining content
         while line is not None:
