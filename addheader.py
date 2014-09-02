@@ -82,17 +82,14 @@ def process_file(filename, config, root):
     contributors = []
     if list_contributors:
         try:
-            ret = subprocess.Popen('git blame ' + filename + ' | perl -n -e \'/\\s\\((.*?)\\s[0-9]{4}/ && print \"$1\\n"\' | uniq',
+            ret = subprocess.Popen('git shortlog -nse ' + filename + ' | cut -f2',
                                     shell=True,
                                     cwd=root,
                                     stdout=subprocess.PIPE,
                                     stderr=sys.stderr)
             out, _ = ret.communicate()
-            contributors = out.strip().split('\n')
-            for ii in range(len(contributors)):
-                contributors[ii] = contributors[ii].strip()
-            contributors = list(set(contributors))
-            contributors = [x for x in contributors if x not in copyright_holders]
+            contributors = out.splitlines()
+            contributors = sorted([x for x in contributors if x.split('<')[0][:-1] not in copyright_holders])
             list_contributors = True if len(contributors) > 0 else False
         except:
             print('WARNING: there was a git related error, contributors will not be listed!')
