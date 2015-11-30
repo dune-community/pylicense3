@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 # pylicense (https://github.com/ftalbrecht/pylicense): addheader.py
 # Copyright Holders: Felix Albrecht
