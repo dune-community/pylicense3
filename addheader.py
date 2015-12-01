@@ -36,10 +36,6 @@ class ConfigError(Exception):
     pass
 
 
-class ParseError(Exception):
-    pass
-
-
 class GitError(Exception):
     pass
 
@@ -116,7 +112,7 @@ def process_file(filename, config, root):
             for ii in range(1, len(year_ranges)):
                 authors[author] += ', ' + years_to_string(year_ranges[ii])
     except:
-        raise GitError('Failed to extract authors from git history!')
+        raise GitError('failed to extract authors from git history!')
 
     copyright_statement = 'The copyright lies with the authors of this file (see below).'
 
@@ -155,15 +151,26 @@ def process_file(filename, config, root):
                     author += ' '
             target.write((u'{}   {} {}\n'.format(prefix, author, year)).encode('utf8'))
         # comments
-        if len(header['comments']) > 0:
-            target.write(prefix + '\n')
-        first_real_comment_line = False
-        for comment in header['comments']:
-            comment = comment.strip()
-            if first_real_comment_line:
-                target.write(comment + '\n')
-            elif len(comment) >= len(prefix) and len(comment[len(prefix):].strip()) > 0:
-                first_real_comment_line = True
+        def prune_first_empty_comments(ll):
+            first_real_comment_line = False
+            ret = []
+            for line in ll:
+                line = line.strip()
+                if first_real_comment_line:
+                    ret.append(line)
+                elif len(line) >= len(line) and len(line[len(prefix):].strip()) > 0:
+                    first_real_comment_line = True
+                    ret.append(line)
+            return ret
+        comments = header['comments']
+        if comments and len(comments) > 0:
+            comments.reverse()
+            comments = prune_first_empty_comments(comments)
+            comments.reverse()
+            comments = prune_first_empty_comments(comments)
+            if len(comments) > 0:
+                target.write(prefix + '\n')
+            for comment in comments:
                 target.write(comment + '\n')
 
     source = open(filename).readlines()
@@ -177,7 +184,6 @@ def process_file(filename, config, root):
               'encoding': None,
               'comments': []}
     could_be_an_author = False
-    could_be_a_comment = False
     while True:
         line = next(source_iter)
         if line is None:
@@ -190,6 +196,7 @@ def process_file(filename, config, root):
             break
         if line.startswith('#!') and len(line.strip()) > 2:
             header['shebang'] = line.strip()
+            continue
         if not line.startswith(prefix):
             break
         else:
@@ -204,7 +211,7 @@ def process_file(filename, config, root):
             elif line[len(prefix):].strip().startswith(url):
                 continue
             elif any([line[len(prefix):].strip().startswith(some_url) for some_url in ('http://', 'https://')]):
-                warning = 'success (Dropping url from header: "{}"!)'.format(line[len(prefix):].strip())
+                warning = 'dropping url \'{}\'!'.format(line[len(prefix):].strip())
             elif line[len(prefix):].strip().startswith('Authors:'): # the following header lines may be authors
                 could_be_an_author = True
                 continue
@@ -249,7 +256,7 @@ if __name__ == '__main__':
     for filename, dirname in process_dir(args['PATH'], config):
         print('{}: '.format(filename[(len(dirname)):]), end='')
         try:
-            res = process_file(filename, config, dirname if dirname != '' else os.path.dirname(filename))
+            res = process_file(filename, config, dirname if dirname != '' else '.')
             print('{}'.format(res if len(res) else 'success'))
-        except (ParseError, GitError) as e:
+        except GitError as e:
             print(e)
