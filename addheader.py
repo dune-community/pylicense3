@@ -49,7 +49,7 @@ def process_dir(dirname, config):
         os.chdir(dirname)
         for root, _, files in os.walk(dirname):
             for abspath in sorted([os.path.join(root, f) for f in files]):
-                if include.match(abspath) and not exclude.match(abspath):
+                if include.match(abspath) and not exclude.match(abspath) and not os.path.islink(abspath):
                     yield (abspath, dirname)
     else:
         raise Exception
