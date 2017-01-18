@@ -62,6 +62,9 @@ def process_file(filename, config, root):
     assert(config.has_option('header', 'license'))
     license = config.get('header', 'license').strip()
     url = config.get('header', 'url').strip() if config.has_option('header', 'url') else None
+    copyright_statement = (config.get('header', 'copyright_statement').strip()
+                           if config.has_option('header', 'copyright_statement')
+                           else 'The copyright lies with the authors of this file (see below).')
     max_width = int(config.get('header', 'max_width')) if config.has_option('header', 'max_width') else 78
     prefix = config.get('header', 'prefix') if config.has_option('header', 'prefix') else '#'
     # read authors and respective years
@@ -113,8 +116,6 @@ def process_file(filename, config, root):
                 authors[author] += ', ' + years_to_string(year_ranges[ii])
     except:
         raise GitError('failed to extract authors from git history!')
-
-    copyright_statement = 'The copyright lies with the authors of this file (see below).'
 
     def write_header(target, header):
         shebang, encoding = header['shebang'], header['encoding']
@@ -200,13 +201,13 @@ def process_file(filename, config, root):
         if not line.startswith(prefix):
             break
         else:
+            can_be_discarded = ['Copyright', 'copyright', 'License']
+            for ii in (project_name, copyright_statement, license):
+                for ll in ii.split('\n'):
+                    can_be_discarded.append(ll.strip().lstrip(prefix).strip())
             if re.match('.*coding[:=]\s*', line):
                 header['encoding'] = line[len(prefix):]
-            elif any([line[len(prefix):].strip().startswith(can_be_discarded) for can_be_discarded in ('Copyright holders:',
-                                                                                                       project_name,
-                                                                                                       copyright_statement,
-                                                                                                       'License:',
-                                                                                                       'Contributors:')]):
+            elif any([line[len(prefix):].strip().startswith(discard) for discard in can_be_discarded]):
                 continue
             elif line[len(prefix):].strip().startswith(url):
                 continue
