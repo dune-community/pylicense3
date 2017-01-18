@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 
 # pylicense (https://github.com/ftalbrecht/pylicense): addheader.py
 # Copyright Holders: Felix Albrecht
@@ -70,7 +71,7 @@ def process_file(filename, config, root):
     # read authors and respective years
     authors = {}
     try:
-        ret = subprocess.Popen('git log --follow --pretty=format:"%aN %ad" --date=format:%Y {} | sort | uniq'.format(filename),
+        ret = subprocess.Popen('git log --use-mailmap --follow --pretty=format:"%aN %ad" --date=format:%Y {} | sort | uniq'.format(filename),
                                 shell=True,
                                 cwd=root,
                                 stdout=subprocess.PIPE,
@@ -81,7 +82,7 @@ def process_file(filename, config, root):
         for year_and_author in git_info:
             year_and_author = year_and_author.strip().split(' ')
             assert len(year_and_author) > 1 # otherwise we have either no name or no year
-            author = ' '.join([word.decode('utf8') for word in year_and_author[:-1]])
+            author = ' '.join([word.decode('utf8') for word in year_and_author[:-1]]).replace(u'é', 'e')
             years_per_author[author].add(int(year_and_author[-1]))
         # parse years
         for author, years in years_per_author.items():
