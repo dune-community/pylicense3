@@ -1,7 +1,7 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# pylicense (https://github.com/ftalbrecht/pylicense): addheader.py
+# pylicense (https://github.com/ftalbrecht/pylicense): pylicense
 # Copyright Holders: Felix Albrecht
 # License: BSD 2-Clause License (http://opensource.org/licenses/BSD-2-Clause)
 
@@ -9,7 +9,7 @@
 Add header to a given file.
 
 Usage:
-    addheader.py [-hv] [--help] [--verbose] --cfg=CONFIG_FILE PATH
+    pylicense [-hv] [--help] [--verbose] --cfg=CONFIG_FILE PATH
 
 
 Arguments:
@@ -23,7 +23,7 @@ Options:
 
 
 from __future__ import print_function
-import ConfigParser
+import configparser
 from docopt import docopt
 from collections import defaultdict
 import subprocess
@@ -71,18 +71,16 @@ def process_file(filename, config, root):
     # read authors and respective years
     authors = {}
     try:
-        ret = subprocess.Popen('git log --use-mailmap --follow --pretty=format:"%aN %ad" --date=format:%Y {} | sort | uniq'.format(filename),
-                                shell=True,
-                                cwd=root,
-                                stdout=subprocess.PIPE,
-                                stderr=sys.stderr)
-        out, _ = ret.communicate()
+        cmd = 'git log --use-mailmap --follow --pretty=format:"%aN %ad" --date=format:%Y {} | sort | uniq'.format(filename)
+        out = subprocess.check_output(cmd,
+                                shell=True, universal_newlines=True,
+                                cwd=root)
         git_info = sorted(out.splitlines())
         years_per_author = defaultdict(set)
         for year_and_author in git_info:
             year_and_author = year_and_author.strip().split(' ')
             assert len(year_and_author) > 1 # otherwise we have either no name or no year
-            author = ' '.join([word.decode('utf8') for word in year_and_author[:-1]]).replace(u'é', 'e')
+            author = ' '.join([word for word in year_and_author[:-1]]).replace(u'é', 'e')
             years_per_author[author].add(int(year_and_author[-1]))
         # parse years
         for author, years in years_per_author.items():
@@ -115,7 +113,7 @@ def process_file(filename, config, root):
             authors[author] = years_to_string(year_ranges[0])
             for ii in range(1, len(year_ranges)):
                 authors[author] += ', ' + years_to_string(year_ranges[ii])
-    except:
+    except KeyError as e:
         raise GitError('failed to extract authors from git history!')
 
     def write_header(target, header):
@@ -151,7 +149,7 @@ def process_file(filename, config, root):
             if len(prefix) + 4 + max_author_length + len(year) <= max_width:
                 for ii in range(max_author_length - len(author)):
                     author += ' '
-            target.write((u'{}   {} {}\n'.format(prefix, author, year)).encode('utf8'))
+            target.write(u'{}   {} {}\n'.format(prefix, author, year))
         # comments
         def prune_first_empty_comments(ll):
             first_real_comment_line = False
@@ -244,13 +242,14 @@ def process_file(filename, config, root):
 
     return warning
 
-if __name__ == '__main__':
+
+def main():
     # parse arguments
     args = docopt(__doc__)
     verbose = False
     if args['--verbose']:
         verbose = True
-    config = ConfigParser.SafeConfigParser()
+    config = configparser.SafeConfigParser()
     if args['--cfg'] is not None:
         config.readfp(open(args['--cfg']))
     else:
@@ -262,3 +261,7 @@ if __name__ == '__main__':
             print('{}'.format(res if len(res) else 'success'))
         except GitError as e:
             print(e)
+
+
+if __name__ == '__main__':
+    main()

@@ -3,7 +3,7 @@ Apply license information to a git project.
 """
 from setuptools import find_packages, setup
 
-dependencies = []
+dependencies = ['docopt']
 
 setup(
     name='pylicense3',
