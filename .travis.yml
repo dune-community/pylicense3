@@ -1,0 +1,35 @@
+sudo: false
+dist: trusty
+language: bash
+services: docker
+
+# necessary for version.py generation to function properly
+git:
+    depth: 1000
+
+before_script:
+    - export IMAGE="pymor/testing:${DOCKER_TAG}"
+    - docker pull ${IMAGE}
+    - export ENV_FILE=${HOME}/env
+    - printenv | \grep TRAVIS > ${ENV_FILE}
+    - printenv | \grep PYTEST_MARKER >> ${ENV_FILE}
+    - export DOCKER_RUN="docker run -e LOCAL_USER_ID=$(id -u) --env-file ${ENV_FILE} -v ${TRAVIS_BUILD_DIR}:/src ${IMAGE}"
+
+script:
+    - ${DOCKER_RUN} pytest /src
+
+notifications:
+  email:
+    on_success: change
+    on_failure: change
+    on_start: never
+
+branches:
+  except:
+    - gh-pages
+
+matrix:
+  include:
+    - env: DOCKER_TAG="3.4"
+    - env: DOCKER_TAG="3.5"
+    - env: DOCKER_TAG="3.6"
