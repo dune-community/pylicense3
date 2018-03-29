@@ -104,6 +104,54 @@ def get_authors(filename, root):
         raise GitError('failed to extract authors from git history!')
     return authors
 
+def read_current_header(source_iter, prefix, project_name, copyright_statement, license, url):
+    header = {'shebang': None,
+              'encoding': None,
+              'comments': []}
+    warning = ''
+    could_be_an_author = False
+    while True:
+        line = next(source_iter)
+        if line is None:
+            break
+        dirt_to_remove = ['\xef', '\xbb', '\xbf']
+        while len(line) > 0 and line[0] in dirt_to_remove:
+            for dirt in dirt_to_remove:
+                line = line.lstrip(dirt)
+        if len(line) == 0:
+            break
+        if line.startswith('#!') and len(line.strip()) > 2:
+            header['shebang'] = line.strip()
+            continue
+        if not line.startswith(prefix):
+            break
+        else:
+            can_be_discarded = ['Copyright', 'copyright', 'License']
+            for ii in (project_name, copyright_statement, license):
+                for ll in ii.split('\n'):
+                    can_be_discarded.append(ll.strip().lstrip(prefix).strip())
+            if re.match('.*coding[:=]\s*', line):
+                header['encoding'] = line[len(prefix):]
+            elif any([line[len(prefix):].strip().startswith(discard) for discard in can_be_discarded]):
+                continue
+            elif line[len(prefix):].strip().startswith(url):
+                continue
+            elif any([line[len(prefix):].strip().startswith(some_url) for some_url in ('http://', 'https://')]):
+                warning = 'dropping url \'{}\'!'.format(line[len(prefix):].strip())
+            elif line[len(prefix):].strip().startswith('Authors:'): # the following header lines may be authors
+                could_be_an_author = True
+                continue
+            elif could_be_an_author:
+                if line[len(prefix):].startswith('  ') and line.strip()[-1] == ')': # we just have to assume that this is an author line
+                    continue
+                else:
+                    could_be_an_author = False
+                    # from now on this is a comment
+                    header['comments'].append(line)
+            else:
+                header['comments'].append(line)
+    return header, warning, line
+
 def process_file(filename, config, root):
     # parse config
     assert(config.has_option('header', 'name'))
@@ -180,54 +228,8 @@ def process_file(filename, config, root):
     source.append(None)
     source_iter = iter(source)
 
-    warning = ''
-
-    # read existing header
-    header = {'shebang': None,
-              'encoding': None,
-              'comments': []}
-    could_be_an_author = False
-    while True:
-        line = next(source_iter)
-        if line is None:
-            break
-        dirt_to_remove = ['\xef', '\xbb', '\xbf']
-        while len(line) > 0 and line[0] in dirt_to_remove:
-            for dirt in dirt_to_remove:
-                line = line.lstrip(dirt)
-        if len(line) == 0:
-            break
-        if line.startswith('#!') and len(line.strip()) > 2:
-            header['shebang'] = line.strip()
-            continue
-        if not line.startswith(prefix):
-            break
-        else:
-            can_be_discarded = ['Copyright', 'copyright', 'License']
-            for ii in (project_name, copyright_statement, license):
-                for ll in ii.split('\n'):
-                    can_be_discarded.append(ll.strip().lstrip(prefix).strip())
-            if re.match('.*coding[:=]\s*', line):
-                header['encoding'] = line[len(prefix):]
-            elif any([line[len(prefix):].strip().startswith(discard) for discard in can_be_discarded]):
-                continue
-            elif line[len(prefix):].strip().startswith(url):
-                continue
-            elif any([line[len(prefix):].strip().startswith(some_url) for some_url in ('http://', 'https://')]):
-                warning = 'dropping url \'{}\'!'.format(line[len(prefix):].strip())
-            elif line[len(prefix):].strip().startswith('Authors:'): # the following header lines may be authors
-                could_be_an_author = True
-                continue
-            elif could_be_an_author:
-                if line[len(prefix):].startswith('  ') and line.strip()[-1] == ')': # we just have to assume that this is an author line
-                    continue
-                else:
-                    could_be_an_author = False
-                    # from now on this is a comment
-                    header['comments'].append(line)
-            else:
-                header['comments'].append(line)
-
+    header, warning, last_header_line = read_current_header(source_iter, prefix, project_name, copyright_statement, license, url)
+    line = last_header_line
     # write new file
     with open(filename, 'w') as target:
 
