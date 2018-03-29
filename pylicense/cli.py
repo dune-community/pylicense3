@@ -55,20 +55,7 @@ def process_dir(dirname, config):
     else:
         raise Exception
 
-
-def process_file(filename, config, root):
-    # parse config
-    assert(config.has_option('header', 'name'))
-    project_name = config.get('header', 'name').strip()
-    assert(config.has_option('header', 'license'))
-    license = config.get('header', 'license').strip()
-    url = config.get('header', 'url').strip() if config.has_option('header', 'url') else None
-    copyright_statement = (config.get('header', 'copyright_statement').strip()
-                           if config.has_option('header', 'copyright_statement')
-                           else 'The copyright lies with the authors of this file (see below).')
-    max_width = int(config.get('header', 'max_width')) if config.has_option('header', 'max_width') else 78
-    prefix = config.get('header', 'prefix') if config.has_option('header', 'prefix') else '#'
-    # read authors and respective years
+def get_authors(filename, root):
     authors = {}
     try:
         cmd = 'git log --use-mailmap --follow --pretty=format:"%aN %ad" --date=format:%Y {} | sort | uniq'.format(filename)
@@ -115,6 +102,22 @@ def process_file(filename, config, root):
                 authors[author] += ', ' + years_to_string(year_ranges[ii])
     except KeyError as e:
         raise GitError('failed to extract authors from git history!')
+    return authors
+
+def process_file(filename, config, root):
+    # parse config
+    assert(config.has_option('header', 'name'))
+    project_name = config.get('header', 'name').strip()
+    assert(config.has_option('header', 'license'))
+    license = config.get('header', 'license').strip()
+    url = config.get('header', 'url').strip() if config.has_option('header', 'url') else None
+    copyright_statement = (config.get('header', 'copyright_statement').strip()
+                           if config.has_option('header', 'copyright_statement')
+                           else 'The copyright lies with the authors of this file (see below).')
+    max_width = int(config.get('header', 'max_width')) if config.has_option('header', 'max_width') else 78
+    prefix = config.get('header', 'prefix') if config.has_option('header', 'prefix') else '#'
+    # read authors and respective years
+    authors = get_authors(filename, root)
 
     def write_header(target, header):
         shebang, encoding = header['shebang'], header['encoding']
