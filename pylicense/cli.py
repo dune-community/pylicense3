@@ -104,7 +104,8 @@ def get_authors(filename, root):
         raise GitError('failed to extract authors from git history!')
     return authors
 
-def read_current_header(source_iter, prefix, project_name, copyright_statement, license_str, url):
+def read_current_header(source_iter, prefix, project_name, copyright_statement, license_str,
+                        url, lead_in, lead_out):
     header = {'shebang': None,
               'encoding': None,
               'comments': []}
@@ -122,6 +123,8 @@ def read_current_header(source_iter, prefix, project_name, copyright_statement, 
             break
         if line.startswith('#!') and len(line.strip()) > 2:
             header['shebang'] = line.strip()
+            continue
+        if lead_in in line or lead_out in line:
             continue
         if not line.startswith(prefix):
             break
@@ -152,7 +155,8 @@ def read_current_header(source_iter, prefix, project_name, copyright_statement, 
                 header['comments'].append(line)
     return header, warning, line
 
-def write_header(target, header, authors, license_str, prefix, project_name, url, max_width, copyright_statement):
+def write_header(target, header, authors, license_str, prefix, project_name, url,
+                 max_width, copyright_statement, lead_in, lead_out):
     shebang, encoding = header['shebang'], header['encoding']
     if shebang:
         target.write(shebang + '\n')
@@ -160,6 +164,8 @@ def write_header(target, header, authors, license_str, prefix, project_name, url
         target.write(prefix + ' ' + encoding + '\n')
     if shebang or encoding:
         target.write(prefix + '\n')
+    if lead_in:
+        target.write(lead_in + '\n')
     # project name and url
     line = prefix + ' ' + project_name
     if url is not None:
@@ -208,6 +214,8 @@ def write_header(target, header, authors, license_str, prefix, project_name, url
             target.write(prefix + '\n')
         for comment in comments:
             target.write(comment + '\n')
+    if lead_out:
+        target.write(lead_out + '\n')
 
 
 def process_file(filename, config, root):
@@ -221,6 +229,8 @@ def process_file(filename, config, root):
                                      fallback='The copyright lies with the authors of this file (see below).').strip()
     max_width = int(config.get('header', 'max_width')) if config.has_option('header', 'max_width') else 78
     prefix = config.get('header', 'prefix') if config.has_option('header', 'prefix') else '#'
+    lead_out = config.get('header', 'lead-out', fallback=None)
+    lead_in = config.get('header', 'lead-in', fallback=None)
     # read authors and respective years
     authors = get_authors(filename, root)
 
@@ -230,7 +240,7 @@ def process_file(filename, config, root):
 
     header, warning, last_header_line = read_current_header(source_iter, prefix,
                                                             project_name, copyright_statement,
-                                                            license_str, url)
+                                                            license_str, url, lead_in, lead_out)
     line = last_header_line
     # write new file
     with open(filename, 'w') as target:
@@ -240,7 +250,7 @@ def process_file(filename, config, root):
             line = next(source_iter)
 
         write_header(target, header, authors, license_str, prefix, project_name,
-                     url, max_width, copyright_statement)
+                     url, max_width, copyright_statement, lead_in, lead_out)
         target.write('\n')
 
         # copy all remaining content
