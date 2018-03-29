@@ -104,7 +104,7 @@ def get_authors(filename, root):
         raise GitError('failed to extract authors from git history!')
     return authors
 
-def read_current_header(source_iter, prefix, project_name, copyright_statement, license, url):
+def read_current_header(source_iter, prefix, project_name, copyright_statement, license_str, url):
     header = {'shebang': None,
               'encoding': None,
               'comments': []}
@@ -127,7 +127,7 @@ def read_current_header(source_iter, prefix, project_name, copyright_statement, 
             break
         else:
             can_be_discarded = ['Copyright', 'copyright', 'License']
-            for ii in (project_name, copyright_statement, license):
+            for ii in (project_name, copyright_statement, license_str):
                 for ll in ii.split('\n'):
                     can_be_discarded.append(ll.strip().lstrip(prefix).strip())
             if re.match('.*coding[:=]\s*', line):
@@ -152,7 +152,7 @@ def read_current_header(source_iter, prefix, project_name, copyright_statement, 
                 header['comments'].append(line)
     return header, warning, line
 
-def write_header(target, header, authors, prefix, project_name, url, max_width, copyright_statement):
+def write_header(target, header, authors, license_str, prefix, project_name, url, max_width, copyright_statement):
     shebang, encoding = header['shebang'], header['encoding']
     if shebang:
         target.write(shebang + '\n')
@@ -173,8 +173,8 @@ def write_header(target, header, authors, prefix, project_name, url, max_width, 
                 target.write(u'{prefix} {url}\n'.format(prefix=prefix, url=url))
     # copyright statement
     target.write(prefix + ' ' + copyright_statement + '\n')
-    # license
-    target.write(u'{p} License: {l}\n'.format(p=prefix, l=license))
+    # license_str
+    target.write(u'{p} License: {l}\n'.format(p=prefix, l=license_str))
     # authors
     target.write(prefix + ' Authors:\n')
     max_author_length = 0
@@ -215,11 +215,10 @@ def process_file(filename, config, root):
     assert(config.has_option('header', 'name'))
     project_name = config.get('header', 'name').strip()
     assert(config.has_option('header', 'license'))
-    license = config.get('header', 'license').strip()
+    license_str = config.get('header', 'license').strip()
     url = config.get('header', 'url').strip() if config.has_option('header', 'url') else None
-    copyright_statement = (config.get('header', 'copyright_statement').strip()
-                           if config.has_option('header', 'copyright_statement')
-                           else 'The copyright lies with the authors of this file (see below).')
+    copyright_statement = config.get('header', 'copyright_statement',
+                                     fallback='The copyright lies with the authors of this file (see below).').strip()
     max_width = int(config.get('header', 'max_width')) if config.has_option('header', 'max_width') else 78
     prefix = config.get('header', 'prefix') if config.has_option('header', 'prefix') else '#'
     # read authors and respective years
@@ -231,7 +230,7 @@ def process_file(filename, config, root):
 
     header, warning, last_header_line = read_current_header(source_iter, prefix,
                                                             project_name, copyright_statement,
-                                                            license, url)
+                                                            license_str, url)
     line = last_header_line
     # write new file
     with open(filename, 'w') as target:
@@ -240,8 +239,8 @@ def process_file(filename, config, root):
         while line is not None and line.isspace():
             line = next(source_iter)
 
-        write_header(target, header, authors, prefix, project_name, url,
-                     max_width, copyright_statement)
+        write_header(target, header, authors, license_str, prefix, project_name,
+                     url, max_width, copyright_statement)
         target.write('\n')
 
         # copy all remaining content
