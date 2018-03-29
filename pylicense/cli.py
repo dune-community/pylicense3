@@ -152,6 +152,64 @@ def read_current_header(source_iter, prefix, project_name, copyright_statement, 
                 header['comments'].append(line)
     return header, warning, line
 
+def write_header(target, header, authors, prefix, project_name, url, max_width, copyright_statement):
+    shebang, encoding = header['shebang'], header['encoding']
+    if shebang:
+        target.write(shebang + '\n')
+    if encoding:
+        target.write(prefix + ' ' + encoding + '\n')
+    if shebang or encoding:
+        target.write(prefix + '\n')
+    # project name and url
+    line = prefix + ' ' + project_name
+    if url is not None:
+        if len(line) + len(url) + len('().') <= max_width:
+            target.write(u'{line} ({url}).\n'.format(line=line, url=url))
+        else:
+            target.write(line + '\n')
+            if max_width - len(prefix) - 1 - len(url):
+                target.write(u'{prefix}   {url}\n'.format(prefix=prefix, url=url))
+            else:
+                target.write(u'{prefix} {url}\n'.format(prefix=prefix, url=url))
+    # copyright statement
+    target.write(prefix + ' ' + copyright_statement + '\n')
+    # license
+    target.write(u'{p} License: {l}\n'.format(p=prefix, l=license))
+    # authors
+    target.write(prefix + ' Authors:\n')
+    max_author_length = 0
+    for author in authors:
+        max_author_length = max(max_author_length, len(author))
+    for author in sorted(authors.keys()):
+        year = '(' + authors[author] + ')'
+        if len(prefix) + 4 + max_author_length + len(year) <= max_width:
+            for ii in range(max_author_length - len(author)):
+                author += ' '
+        target.write(u'{}   {} {}\n'.format(prefix, author, year))
+    # comments
+    def prune_first_empty_comments(ll):
+        first_real_comment_line = False
+        ret = []
+        for line in ll:
+            line = line.strip()
+            if first_real_comment_line:
+                ret.append(line)
+            elif len(line) >= len(line) and len(line[len(prefix):].strip()) > 0:
+                first_real_comment_line = True
+                ret.append(line)
+        return ret
+    comments = header['comments']
+    if comments and len(comments) > 0:
+        comments.reverse()
+        comments = prune_first_empty_comments(comments)
+        comments.reverse()
+        comments = prune_first_empty_comments(comments)
+        if len(comments) > 0:
+            target.write(prefix + '\n')
+        for comment in comments:
+            target.write(comment + '\n')
+
+
 def process_file(filename, config, root):
     # parse config
     assert(config.has_option('header', 'name'))
@@ -167,68 +225,13 @@ def process_file(filename, config, root):
     # read authors and respective years
     authors = get_authors(filename, root)
 
-    def write_header(target, header):
-        shebang, encoding = header['shebang'], header['encoding']
-        if shebang:
-            target.write(shebang + '\n')
-        if encoding:
-            target.write(prefix + ' ' + encoding + '\n')
-        if shebang or encoding:
-            target.write(prefix + '\n')
-        # project name and url
-        line = prefix + ' ' + project_name
-        if url is not None:
-            if len(line) + len(url) + len('().') <= max_width:
-                target.write(u'{line} ({url}).\n'.format(line=line, url=url))
-            else:
-                target.write(line + '\n')
-                if max_width - len(prefix) - 1 - len(url):
-                    target.write(u'{prefix}   {url}\n'.format(prefix=prefix, url=url))
-                else:
-                    target.write(u'{prefix} {url}\n'.format(prefix=prefix, url=url))
-        # copyright statement
-        target.write(prefix + ' ' + copyright_statement + '\n')
-        # license
-        target.write(u'{p} License: {l}\n'.format(p=prefix, l=license))
-        # authors
-        target.write(prefix + ' Authors:\n')
-        max_author_length = 0
-        for author in authors:
-            max_author_length = max(max_author_length, len(author))
-        for author in sorted(authors.keys()):
-            year = '(' + authors[author] + ')'
-            if len(prefix) + 4 + max_author_length + len(year) <= max_width:
-                for ii in range(max_author_length - len(author)):
-                    author += ' '
-            target.write(u'{}   {} {}\n'.format(prefix, author, year))
-        # comments
-        def prune_first_empty_comments(ll):
-            first_real_comment_line = False
-            ret = []
-            for line in ll:
-                line = line.strip()
-                if first_real_comment_line:
-                    ret.append(line)
-                elif len(line) >= len(line) and len(line[len(prefix):].strip()) > 0:
-                    first_real_comment_line = True
-                    ret.append(line)
-            return ret
-        comments = header['comments']
-        if comments and len(comments) > 0:
-            comments.reverse()
-            comments = prune_first_empty_comments(comments)
-            comments.reverse()
-            comments = prune_first_empty_comments(comments)
-            if len(comments) > 0:
-                target.write(prefix + '\n')
-            for comment in comments:
-                target.write(comment + '\n')
-
     source = open(filename).readlines()
     source.append(None)
     source_iter = iter(source)
 
-    header, warning, last_header_line = read_current_header(source_iter, prefix, project_name, copyright_statement, license, url)
+    header, warning, last_header_line = read_current_header(source_iter, prefix,
+                                                            project_name, copyright_statement,
+                                                            license, url)
     line = last_header_line
     # write new file
     with open(filename, 'w') as target:
@@ -237,7 +240,8 @@ def process_file(filename, config, root):
         while line is not None and line.isspace():
             line = next(source_iter)
 
-        write_header(target, header)
+        write_header(target, header, authors, prefix, project_name, url,
+                     max_width, copyright_statement)
         target.write('\n')
 
         # copy all remaining content
