@@ -55,20 +55,7 @@ def process_dir(dirname, config):
     else:
         raise Exception
 
-
-def process_file(filename, config, root):
-    # parse config
-    assert(config.has_option('header', 'name'))
-    project_name = config.get('header', 'name').strip()
-    assert(config.has_option('header', 'license'))
-    license = config.get('header', 'license').strip()
-    url = config.get('header', 'url').strip() if config.has_option('header', 'url') else None
-    copyright_statement = (config.get('header', 'copyright_statement').strip()
-                           if config.has_option('header', 'copyright_statement')
-                           else 'The copyright lies with the authors of this file (see below).')
-    max_width = int(config.get('header', 'max_width')) if config.has_option('header', 'max_width') else 78
-    prefix = config.get('header', 'prefix') if config.has_option('header', 'prefix') else '#'
-    # read authors and respective years
+def get_authors(filename, root):
     authors = {}
     try:
         cmd = 'git log --use-mailmap --follow --pretty=format:"%aN %ad" --date=format:%Y {} | sort | uniq'.format(filename)
@@ -115,74 +102,14 @@ def process_file(filename, config, root):
                 authors[author] += ', ' + years_to_string(year_ranges[ii])
     except KeyError as e:
         raise GitError('failed to extract authors from git history!')
+    return authors
 
-    def write_header(target, header):
-        shebang, encoding = header['shebang'], header['encoding']
-        if shebang:
-            target.write(shebang + '\n')
-        if encoding:
-            target.write(prefix + ' ' + encoding + '\n')
-        if shebang or encoding:
-            target.write(prefix + '\n')
-        # project name and url
-        line = prefix + ' ' + project_name
-        if url is not None:
-            if len(line) + len(url) + len('().') <= max_width:
-                target.write(u'{line} ({url}).\n'.format(line=line, url=url))
-            else:
-                target.write(line + '\n')
-                if max_width - len(prefix) - 1 - len(url):
-                    target.write(u'{prefix}   {url}\n'.format(prefix=prefix, url=url))
-                else:
-                    target.write(u'{prefix} {url}\n'.format(prefix=prefix, url=url))
-        # copyright statement
-        target.write(prefix + ' ' + copyright_statement + '\n')
-        # license
-        target.write(u'{p} License: {l}\n'.format(p=prefix, l=license))
-        # authors
-        target.write(prefix + ' Authors:\n')
-        max_author_length = 0
-        for author in authors:
-            max_author_length = max(max_author_length, len(author))
-        for author in sorted(authors.keys()):
-            year = '(' + authors[author] + ')'
-            if len(prefix) + 4 + max_author_length + len(year) <= max_width:
-                for ii in range(max_author_length - len(author)):
-                    author += ' '
-            target.write(u'{}   {} {}\n'.format(prefix, author, year))
-        # comments
-        def prune_first_empty_comments(ll):
-            first_real_comment_line = False
-            ret = []
-            for line in ll:
-                line = line.strip()
-                if first_real_comment_line:
-                    ret.append(line)
-                elif len(line) >= len(line) and len(line[len(prefix):].strip()) > 0:
-                    first_real_comment_line = True
-                    ret.append(line)
-            return ret
-        comments = header['comments']
-        if comments and len(comments) > 0:
-            comments.reverse()
-            comments = prune_first_empty_comments(comments)
-            comments.reverse()
-            comments = prune_first_empty_comments(comments)
-            if len(comments) > 0:
-                target.write(prefix + '\n')
-            for comment in comments:
-                target.write(comment + '\n')
-
-    source = open(filename).readlines()
-    source.append(None)
-    source_iter = iter(source)
-
-    warning = ''
-
-    # read existing header
+def read_current_header(source_iter, prefix, project_name, copyright_statement, license_str,
+                        url, lead_in, lead_out):
     header = {'shebang': None,
               'encoding': None,
               'comments': []}
+    warning = ''
     could_be_an_author = False
     while True:
         line = next(source_iter)
@@ -197,11 +124,13 @@ def process_file(filename, config, root):
         if line.startswith('#!') and len(line.strip()) > 2:
             header['shebang'] = line.strip()
             continue
+        if lead_in in line or lead_out in line:
+            continue
         if not line.startswith(prefix):
             break
         else:
             can_be_discarded = ['Copyright', 'copyright', 'License']
-            for ii in (project_name, copyright_statement, license):
+            for ii in (project_name, copyright_statement, license_str):
                 for ll in ii.split('\n'):
                     can_be_discarded.append(ll.strip().lstrip(prefix).strip())
             if re.match('.*coding[:=]\s*', line):
@@ -224,7 +153,95 @@ def process_file(filename, config, root):
                     header['comments'].append(line)
             else:
                 header['comments'].append(line)
+    return header, warning, line
 
+def write_header(target, header, authors, license_str, prefix, project_name, url,
+                 max_width, copyright_statement, lead_in, lead_out):
+    shebang, encoding = header['shebang'], header['encoding']
+    if shebang:
+        target.write(shebang + '\n')
+    if encoding:
+        target.write(prefix + ' ' + encoding + '\n')
+    if shebang or encoding:
+        target.write(prefix + '\n')
+    if lead_in:
+        target.write(lead_in + '\n')
+    # project name and url
+    line = prefix + ' ' + project_name
+    if url is not None:
+        if len(line) + len(url) + len('().') <= max_width:
+            target.write(u'{line} ({url}).\n'.format(line=line, url=url))
+        else:
+            target.write(line + '\n')
+            if max_width - len(prefix) - 1 - len(url):
+                target.write(u'{prefix}   {url}\n'.format(prefix=prefix, url=url))
+            else:
+                target.write(u'{prefix} {url}\n'.format(prefix=prefix, url=url))
+    # copyright statement
+    target.write(prefix + ' ' + copyright_statement + '\n')
+    # license_str
+    target.write(u'{p} License: {l}\n'.format(p=prefix, l=license_str))
+    # authors
+    target.write(prefix + ' Authors:\n')
+    max_author_length = 0
+    for author in authors:
+        max_author_length = max(max_author_length, len(author))
+    for author in sorted(authors.keys()):
+        year = '(' + authors[author] + ')'
+        if len(prefix) + 4 + max_author_length + len(year) <= max_width:
+            for ii in range(max_author_length - len(author)):
+                author += ' '
+        target.write(u'{}   {} {}\n'.format(prefix, author, year))
+    # comments
+    def prune_first_empty_comments(ll):
+        first_real_comment_line = False
+        ret = []
+        for line in ll:
+            line = line.strip()
+            if first_real_comment_line:
+                ret.append(line)
+            elif len(line) >= len(line) and len(line[len(prefix):].strip()) > 0:
+                first_real_comment_line = True
+                ret.append(line)
+        return ret
+    comments = header['comments']
+    if comments and len(comments) > 0:
+        comments.reverse()
+        comments = prune_first_empty_comments(comments)
+        comments.reverse()
+        comments = prune_first_empty_comments(comments)
+        if len(comments) > 0:
+            target.write(prefix + '\n')
+        for comment in comments:
+            target.write(comment + '\n')
+    if lead_out:
+        target.write(lead_out + '\n')
+
+
+def process_file(filename, config, root):
+    # parse config
+    assert(config.has_option('header', 'name'))
+    project_name = config.get('header', 'name').strip()
+    assert(config.has_option('header', 'license'))
+    license_str = config.get('header', 'license').strip()
+    url = config.get('header', 'url').strip() if config.has_option('header', 'url') else None
+    copyright_statement = config.get('header', 'copyright_statement',
+                                     fallback='The copyright lies with the authors of this file (see below).').strip()
+    max_width = int(config.get('header', 'max_width')) if config.has_option('header', 'max_width') else 78
+    prefix = config.get('header', 'prefix') if config.has_option('header', 'prefix') else '#'
+    lead_out = config.get('header', 'lead-out', fallback=None)
+    lead_in = config.get('header', 'lead-in', fallback=None)
+    # read authors and respective years
+    authors = get_authors(filename, root)
+
+    source = open(filename).readlines()
+    source.append(None)
+    source_iter = iter(source)
+
+    header, warning, last_header_line = read_current_header(source_iter, prefix,
+                                                            project_name, copyright_statement,
+                                                            license_str, url, lead_in, lead_out)
+    line = last_header_line
     # write new file
     with open(filename, 'w') as target:
 
@@ -232,7 +249,8 @@ def process_file(filename, config, root):
         while line is not None and line.isspace():
             line = next(source_iter)
 
-        write_header(target, header)
+        write_header(target, header, authors, license_str, prefix, project_name,
+                     url, max_width, copyright_statement, lead_in, lead_out)
         target.write('\n')
 
         # copy all remaining content
