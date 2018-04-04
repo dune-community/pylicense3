@@ -7,7 +7,7 @@ dependencies = ['docopt']
 
 setup(
     name='pylicense3',
-    version='0.2.0',
+    version='0.2.1',
     url='https://github.com/dune-community/pylicense',
     license='BSD',
     author='René Milk',

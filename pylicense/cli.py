@@ -124,7 +124,7 @@ def read_current_header(source_iter, prefix, project_name, copyright_statement, 
         if line.startswith('#!') and len(line.strip()) > 2:
             header['shebang'] = line.strip()
             continue
-        if lead_in in line or lead_out in line:
+        if (lead_in and lead_in in line) or (lead_out and lead_out in line):
             continue
         if not line.startswith(prefix):
             break
