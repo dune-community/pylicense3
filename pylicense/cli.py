@@ -55,6 +55,7 @@ def process_dir(dirname, config):
     else:
         raise Exception
 
+
 def get_authors(filename, root):
     authors = {}
     try:
@@ -103,6 +104,7 @@ def get_authors(filename, root):
     except KeyError as e:
         raise GitError('failed to extract authors from git history!')
     return authors
+
 
 def read_current_header(source_iter, prefix, project_name, copyright_statement, license_str,
                         url, lead_in, lead_out):
@@ -155,6 +157,7 @@ def read_current_header(source_iter, prefix, project_name, copyright_statement, 
                 header['comments'].append(line)
     return header, warning, line
 
+
 def write_header(target, header, authors, license_str, prefix, project_name, url,
                  max_width, copyright_statement, lead_in, lead_out):
     shebang, encoding = header['shebang'], header['encoding']
@@ -180,7 +183,8 @@ def write_header(target, header, authors, license_str, prefix, project_name, url
     # copyright statement
     target.write(prefix + ' ' + copyright_statement + '\n')
     # license_str
-    target.write(u'{p} License: {l}\n'.format(p=prefix, l=license_str))
+    l_str = ' \n{} '.format(prefix).join(license_str.split('\n'))
+    target.write(u'{} License: {}\n'.format(prefix, l_str))
     # authors
     target.write(prefix + ' Authors:\n')
     max_author_length = 0
@@ -223,7 +227,7 @@ def process_file(filename, config, root):
     assert(config.has_option('header', 'name'))
     project_name = config.get('header', 'name').strip()
     assert(config.has_option('header', 'license'))
-    license_str = config.get('header', 'license').strip()
+    license_str = config.get('header', 'license', raw=True)
     url = config.get('header', 'url').strip() if config.has_option('header', 'url') else None
     copyright_statement = config.get('header', 'copyright_statement',
                                      fallback='The copyright lies with the authors of this file (see below).').strip()
@@ -238,6 +242,9 @@ def process_file(filename, config, root):
     source.append(None)
     source_iter = iter(source)
 
+    print('*'*88)
+    print(license_str)
+    print('*' * 88)
     header, warning, last_header_line = read_current_header(source_iter, prefix,
                                                             project_name, copyright_statement,
                                                             license_str, url, lead_in, lead_out)
@@ -267,7 +274,7 @@ def main():
     verbose = False
     if args['--verbose']:
         verbose = True
-    config = configparser.SafeConfigParser()
+    config = configparser.ConfigParser()
     if args['--cfg'] is not None:
         config.readfp(open(args['--cfg']))
     else:
