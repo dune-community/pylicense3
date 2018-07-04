@@ -1,3 +1,4 @@
+# coding=utf-8
 """
 Apply license information to a git project.
 """
