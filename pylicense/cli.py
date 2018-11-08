@@ -22,19 +22,15 @@ Options:
 """
 
 
-from __future__ import print_function
 import configparser
+import importlib
+
 from docopt import docopt
 from collections import defaultdict
 import subprocess
 import os
-import sys
 import re
 import fnmatch
-
-
-class ConfigError(Exception):
-    pass
 
 
 class GitError(Exception):
@@ -45,8 +41,8 @@ def process_dir(dirname, config):
     if os.path.isfile(dirname):
         yield (dirname, '')
     elif os.path.isdir(dirname):
-        include = re.compile('|'.join(fnmatch.translate(p) for p in config.get('files', 'include_patterns').split()))
-        exclude = re.compile('|'.join(fnmatch.translate(p) for p in config.get('files', 'exclude_patterns').split()))
+        include = re.compile('|'.join(fnmatch.translate(p) for p in config.include_patterns))
+        exclude = re.compile('|'.join(fnmatch.translate(p) for p in config.exclude_patterns))
         os.chdir(dirname)
         for root, _, files in os.walk(dirname):
             for abspath in sorted([os.path.join(root, f) for f in files]):
@@ -68,7 +64,7 @@ def get_authors(filename, root):
         for year_and_author in git_info:
             year_and_author = year_and_author.strip().split(' ')
             assert len(year_and_author) > 1 # otherwise we have either no name or no year
-            author = ' '.join([word for word in year_and_author[:-1]]).replace(u'é', 'e')
+            author = ' '.join([word for word in year_and_author[:-1]])
             years_per_author[author].add(int(year_and_author[-1]))
         # parse years
         for author, years in years_per_author.items():
@@ -224,17 +220,17 @@ def write_header(target, header, authors, license_str, prefix, project_name, url
 
 def process_file(filename, config, root):
     # parse config
-    assert(config.has_option('header', 'name'))
-    project_name = config.get('header', 'name').strip()
-    assert(config.has_option('header', 'license'))
-    license_str = config.get('header', 'license', raw=True)
-    url = config.get('header', 'url').strip() if config.has_option('header', 'url') else None
-    copyright_statement = config.get('header', 'copyright_statement',
-                                     fallback='The copyright lies with the authors of this file (see below).').strip()
-    max_width = int(config.get('header', 'max_width')) if config.has_option('header', 'max_width') else 78
-    prefix = config.get('header', 'prefix') if config.has_option('header', 'prefix') else '#'
-    lead_out = config.get('header', 'lead-out', fallback=None)
-    lead_in = config.get('header', 'lead-in', fallback=None)
+    assert(hasattr(config, 'name'))
+    project_name = config.name.strip()
+    assert(hasattr(config, 'license'))
+    license_str = config.license
+    url = getattr(config, 'url', None)
+    copyright_statement = getattr(config, 'copyright_statement',
+                                  'The copyright lies with the authors of this file (see below).')
+    max_width = getattr(config, 'max_width', 78)
+    prefix = getattr(config, 'prefix', '#')
+    lead_out = getattr(config, 'lead_out', None)
+    lead_in = getattr(config, 'lead_in', None)
     # read authors and respective years
     authors = get_authors(filename, root)
 
@@ -271,14 +267,12 @@ def process_file(filename, config, root):
 def main():
     # parse arguments
     args = docopt(__doc__)
-    verbose = False
-    if args['--verbose']:
-        verbose = True
-    config = configparser.ConfigParser()
-    if args['--cfg'] is not None:
-        config.readfp(open(args['--cfg']))
-    else:
-        raise ConfigError('No suitable config file given (try \'--cfg CONFIG_FILE\')!')
+    verbose = '--verbose' in args
+    cfg = args['--cfg']
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("config", cfg)
+    config = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(config)
     for filename, dirname in process_dir(args['PATH'], config):
         print('{}: '.format(filename[(len(dirname)):]), end='')
         try:
