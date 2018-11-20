@@ -24,6 +24,8 @@ Options:
 
 import configparser
 import importlib
+import io
+import unicodedata
 
 from docopt import docopt
 from collections import defaultdict
@@ -38,8 +40,11 @@ class GitError(Exception):
 
 
 def process_dir(dirname, config):
+    # for these files all content will be forced to use ascii-only
+    force_ascii_patterns = getattr(config, 'ascii_files', ('*/setup.py*', '*/setup.cfg'))
+    force_ascii = re.compile('|'.join(fnmatch.translate(p) for p in force_ascii_patterns))
     if os.path.isfile(dirname):
-        yield (dirname, '')
+        yield (dirname, '', force_ascii.match(dirname))
     elif os.path.isdir(dirname):
         include = re.compile('|'.join(fnmatch.translate(p) for p in config.include_patterns))
         exclude = re.compile('|'.join(fnmatch.translate(p) for p in config.exclude_patterns))
@@ -47,7 +52,7 @@ def process_dir(dirname, config):
         for root, _, files in os.walk(dirname):
             for abspath in sorted([os.path.join(root, f) for f in files]):
                 if include.match(abspath) and not exclude.match(abspath) and not os.path.islink(abspath):
-                    yield (abspath, dirname)
+                    yield (abspath, dirname, force_ascii.match(abspath))
     else:
         raise Exception
 
@@ -154,8 +159,9 @@ def read_current_header(source_iter, prefix, project_name, copyright_statement, 
     return header, warning, line
 
 
-def write_header(target, header, authors, license_str, prefix, project_name, url,
+def write_header(header, authors, license_str, prefix, project_name, url,
                  max_width, copyright_statement, lead_in, lead_out):
+    target = io.StringIO()
     shebang, encoding = header['shebang'], header['encoding']
     if shebang:
         target.write(shebang + '\n')
@@ -179,7 +185,7 @@ def write_header(target, header, authors, license_str, prefix, project_name, url
     # copyright statement
     target.write(prefix + ' ' + copyright_statement + '\n')
     # license_str
-    l_str = ' \n{} '.format(prefix).join(license_str.split('\n'))
+    l_str = '\n{}'.format(prefix).join(license_str.split('\n'))
     target.write(u'{} License: {}\n'.format(prefix, l_str))
     # authors
     target.write(prefix + ' Authors:\n')
@@ -216,9 +222,11 @@ def write_header(target, header, authors, license_str, prefix, project_name, url
             target.write(comment + '\n')
     if lead_out:
         target.write(lead_out + '\n')
+    target.seek(0)
+    return target
 
 
-def process_file(filename, config, root):
+def process_file(filename, config, root, force_ascii):
     # parse config
     assert(hasattr(config, 'name'))
     project_name = config.name.strip()
@@ -231,6 +239,7 @@ def process_file(filename, config, root):
     prefix = getattr(config, 'prefix', '#')
     lead_out = getattr(config, 'lead_out', None)
     lead_in = getattr(config, 'lead_in', None)
+
     # read authors and respective years
     authors = get_authors(filename, root)
 
@@ -238,9 +247,6 @@ def process_file(filename, config, root):
     source.append(None)
     source_iter = iter(source)
 
-    print('*'*88)
-    print(license_str)
-    print('*' * 88)
     header, warning, last_header_line = read_current_header(source_iter, prefix,
                                                             project_name, copyright_statement,
                                                             license_str, url, lead_in, lead_out)
@@ -252,8 +258,12 @@ def process_file(filename, config, root):
         while line is not None and line.isspace():
             line = next(source_iter)
 
-        write_header(target, header, authors, license_str, prefix, project_name,
-                     url, max_width, copyright_statement, lead_in, lead_out)
+        out = write_header(header, authors, license_str, prefix, project_name,
+                     url, max_width, copyright_statement, lead_in, lead_out).read()
+        assert isinstance(out, str)
+        if force_ascii:
+            out = unicodedata.normalize('NFKD', out).encode('ascii','ignore').decode()
+        target.write(out)
         target.write('\n')
 
         # copy all remaining content
@@ -273,10 +283,10 @@ def main():
     spec = importlib.util.spec_from_file_location("config", cfg)
     config = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(config)
-    for filename, dirname in process_dir(args['PATH'], config):
+    for filename, dirname, force_ascii in process_dir(args['PATH'], config):
         print('{}: '.format(filename[(len(dirname)):]), end='')
         try:
-            res = process_file(filename, config, dirname if dirname != '' else '.')
+            res = process_file(filename, config, dirname if dirname != '' else '.', force_ascii=force_ascii)
             print('{}'.format(res if len(res) else 'success'))
         except GitError as e:
             print(e)

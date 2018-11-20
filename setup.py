@@ -4,11 +4,11 @@ Apply license information to a git project.
 """
 from setuptools import find_packages, setup
 
-dependencies = ['docopt']
+dependencies = ['docopt',]
 
 setup(
     name='pylicense3',
-    version='0.4.0',
+    version='0.4.1',
     url='https://github.com/dune-community/pylicense',
     license='BSD',
     author='René Fritze',
