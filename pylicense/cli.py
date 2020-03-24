@@ -42,11 +42,13 @@ def process_dir(dirname, config):
         yield (dirname, '')
     elif os.path.isdir(dirname):
         include = re.compile('|'.join(fnmatch.translate(p) for p in config.include_patterns))
-        exclude = re.compile('|'.join(fnmatch.translate(p) for p in config.exclude_patterns))
+        exclude = None
+        if len(config.exclude_patterns) > 0:
+          exclude = re.compile('|'.join(fnmatch.translate(p) for p in config.exclude_patterns))
         os.chdir(dirname)
         for root, _, files in os.walk(dirname):
             for abspath in sorted([os.path.join(root, f) for f in files]):
-                if include.match(abspath) and not exclude.match(abspath) and not os.path.islink(abspath):
+                if include.match(abspath) and (not exclude or not exclude.match(abspath)) and not os.path.islink(abspath):
                     yield (abspath, dirname)
     else:
         raise Exception
@@ -179,7 +181,7 @@ def write_header(target, header, authors, license_str, prefix, project_name, url
     # copyright statement
     target.write(prefix + ' ' + copyright_statement + '\n')
     # license_str
-    l_str = ' \n{} '.format(prefix).join(license_str.split('\n'))
+    l_str = '\n{}'.format(prefix).join(license_str.split('\n'))
     target.write(u'{} License: {}\n'.format(prefix, l_str))
     # authors
     target.write(prefix + ' Authors:\n')
